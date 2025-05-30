@@ -1,7 +1,7 @@
-name: Daily Autopublish
+name: Daily Autopublish
 on:
   schedule:
-    - cron:  '0 */6 * * *'   # every 6 h for freshness
+    - cron:  '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -9,18 +9,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
-        with: {python-version: '3.11'}
+        with:
+          python-version: '3.11'
 
       - name: Install deps
-        run: pip install requests python-frontmatter boto3
+        run: |
+          pip install requests python-frontmatter boto3 feedparser python-slugify
 
       - name: Fetch hot topic
         id: topic
         run: |
           python - << 'PY'
-import feedparser, random, json, os
+import feedparser, random, os
 feed = feedparser.parse('https://en.wikipedia.org/api/rest_v1/feed/featured/2025/05/30')
 choices = [i['title'] for i in feed.entries if len(i['title'].split())>2]
 print(f"::set-output name=title::{random.choice(choices)}")
@@ -31,39 +34,31 @@ PY
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python - << 'PY'
-import os, requests, datetime, json, textwrap, pathlib, re
+import os, requests, datetime, pathlib, textwrap
 from slugify import slugify
+subject=os.getenv('TITLE', 'Unknown Trend')
+prompt=f"Write a 900-word SEO blog post about {subject}."
+headers={'Authorization':f"Bearer {os.getenv('HF_TOKEN')}", 'Content-Type':'application/json'}
 api='https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2'
-headers={'Authorization':f'Bearer {os.getenv("HF_TOKEN")}', 'Content-Type':'application/json'}
-subject=os.getenv('TOPIC_TITLE', 'Unknown Trend')
-prompt=f"""Write a 900‑word SEO‑optimised blog post about {subject}. Include a witty intro, 5 H2 sections, and a punchy conclusion. Embed markdown image tags where useful but NO external links."""
-resp=requests.post(api, headers=headers, json={'inputs':prompt, 'options':{'wait_for_model':True}})
-text=resp.json()[0]['generated_text']
-slug=slugify(subject)
+res=requests.post(api, headers=headers, json={'inputs':prompt, 'options':{'wait_for_model':True}})
+text=res.json()[0]['generated_text']
 now=datetime.datetime.utcnow().strftime('%Y-%m-%d')
-post_path=pathlib.Path(f'_posts/{now}-{slug}.md')
-front=f"""---\nlayout: post\ntitle: "{subject}"\ndate: {now} 00:00:00 +0000\ncategories: [trending]\n---\n\n"""
-post_path.write_text(front+text)
+slug=slugify(subject)
+path=pathlib.Path(f'_posts/{now}-{slug}.md')
+front=f"---
+layout: post
+title: {subject}
+date: {now} 00:00:00 +0000
+---
+
+"
+path.write_text(front+text)
 PY
 
       - name: Commit & push
         run: |
-          git config user.name  'APIE‑bot'
+          git config user.name  'APIE-bot'
           git config user.email 'bot@users.noreply.github.com'
           git add _posts/*.md
-          git commit -m "chore: new autopost $(date -u)" || echo "No changes"
+          git commit -m "Autopost" || echo "Nothing new"
           git push
-
-      - name: Tweet hook
-        if: success()
-        env:
-          TW_BEARER: ${{ secrets.TW_BEARER }}
-        run: |
-          python - << 'PY'
-import os, requests, json, sys, glob, pathlib
-latest=max(glob.glob('_posts/*.md'), key=os.path.getctime)
-title=pathlib.Path(latest).read_text().split('\n')[2].replace('title:','').strip(' "')
-body=f"🔥 {title} – new post just dropped! Read free ▶️ https://YOURUSERNAME.github.io 🚀 #trending"
-headers={"Authorization":f"Bearer {os.getenv('TW_BEARER')}", "Content-Type":"application/json"}
-requests.post('https://api.twitter.com/2/tweets', headers=headers, json={'text':body})
-PY

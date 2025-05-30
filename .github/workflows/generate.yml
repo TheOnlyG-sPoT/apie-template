@@ -24,12 +24,19 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python - << 'PY'
-          import feedparser, random, requests, datetime, pathlib, os
+           import feedparser, random, requests, datetime, pathlib, os
           from slugify import slugify
 
-          # 1️⃣  Pick a trending Wikipedia headline
-          feed = feedparser.parse('https://en.wikipedia.org/api/rest_v1/feed/featured/2025/05/30')
-          subject = random.choice([e['title'] for e in feed.entries if len(e['title'].split()) > 2])
+          today = datetime.date.today()
+          feed_url = f'https://en.wikipedia.org/api/rest_v1/feed/featured/{today:%Y/%m/%d}'
+          entries  = feedparser.parse(feed_url).entries
+          titles   = [e['title'] for e in entries if 'title' in e]
+
+          # ▸ Fallback topic if feed is empty
+          if not titles:
+              titles = ['Breakthroughs in Artificial-Intelligence 2025']
+
+          subject  = random.choice(titles)
 
           # 2️⃣  Ask HuggingFace LLM for a 900‑word SEO post
           prompt = f"Write a 900‑word SEO blog post about {subject}."

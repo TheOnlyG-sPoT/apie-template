@@ -1,7 +1,7 @@
 name: Daily Autopublish
 on:
   schedule:
-    - cron:  '0 */6 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -23,10 +23,10 @@ jobs:
         id: topic
         run: |
           python - << 'PY'
-import feedparser, random, os
+import feedparser, random
 feed = feedparser.parse('https://en.wikipedia.org/api/rest_v1/feed/featured/2025/05/30')
-choices = [i['title'] for i in feed.entries if len(i['title'].split())>2]
-print(f"::set-output name=title::{random.choice(choices)}")
+choices = [e['title'] for e in feed.entries if len(e['title'].split()) > 2]
+print(f"title={random.choice(choices)}")
 PY
 
       - name: Generate article via HF LLM
@@ -34,31 +34,27 @@ PY
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python - << 'PY'
-import os, requests, datetime, pathlib, textwrap
+import os, requests, datetime, pathlib
 from slugify import slugify
-subject=os.getenv('TITLE', 'Unknown Trend')
-prompt=f"Write a 900-word SEO blog post about {subject}."
-headers={'Authorization':f"Bearer {os.getenv('HF_TOKEN')}", 'Content-Type':'application/json'}
-api='https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2'
-res=requests.post(api, headers=headers, json={'inputs':prompt, 'options':{'wait_for_model':True}})
-text=res.json()[0]['generated_text']
-now=datetime.datetime.utcnow().strftime('%Y-%m-%d')
-slug=slugify(subject)
-path=pathlib.Path(f'_posts/{now}-{slug}.md')
-front=f"---
-layout: post
-title: {subject}
-date: {now} 00:00:00 +0000
----
-
-"
-path.write_text(front+text)
+subject = os.getenv('title', 'Unknown Trend')
+prompt = f"Write a 900-word SEO blog post about {subject}."
+headers = {
+    'Authorization': f"Bearer {os.getenv('HF_TOKEN')}",
+    'Content-Type': 'application/json'
+}
+api = 'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2'
+text = requests.post(api, headers=headers, json={'inputs': prompt}).json()[0]['generated_text']
+now = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+slug = slugify(subject)
+path = pathlib.Path(f'_posts/{now}-{slug}.md')
+front = f"---\nlayout: post\ntitle: {subject}\ndate: {now} 00:00:00 +0000\n---\n\n"
+path.write_text(front + text)
 PY
 
       - name: Commit & push
         run: |
-          git config user.name  'APIE-bot'
+          git config user.name 'APIE-bot'
           git config user.email 'bot@users.noreply.github.com'
-          git add _posts/*.md
+          git add _posts/*.md || true
           git commit -m "Autopost" || echo "Nothing new"
           git push

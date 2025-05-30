@@ -24,7 +24,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python - << 'PY'
-           import feedparser, random, requests, datetime, pathlib, os
+          import feedparser, random, requests, datetime, pathlib, os
           from slugify import slugify
 
           today = datetime.date.today()

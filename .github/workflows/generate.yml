@@ -27,12 +27,12 @@ jobs:
           import feedparser, random, requests, datetime, pathlib, os
           from slugify import slugify
 
-          today = datetime.date.today()
+          today    = datetime.date.today()
           feed_url = f'https://en.wikipedia.org/api/rest_v1/feed/featured/{today:%Y/%m/%d}'
           entries  = feedparser.parse(feed_url).entries
           titles   = [e['title'] for e in entries if 'title' in e]
 
-          # ▸ Fallback topic if feed is empty
+          # ▸ Fallback topic if the feed is empty
           if not titles:
               titles = ['Breakthroughs in Artificial-Intelligence 2025']
 

@@ -15,46 +15,44 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install deps
+      - name: Install Python deps
         run: |
-          pip install requests python-frontmatter boto3 feedparser python-slugify
+          pip install requests feedparser python-slugify
 
-      - name: Fetch hot topic
-        id: topic
-        run: |
-          python - << 'PY'
-import feedparser, random
-feed = feedparser.parse('https://en.wikipedia.org/api/rest_v1/feed/featured/2025/05/30')
-choices = [e['title'] for e in feed.entries if len(e['title'].split()) > 2]
-print(f"title={random.choice(choices)}")
-PY
-
-      - name: Generate article via HF LLM
+      - name: Generate & publish post
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python - << 'PY'
-import os, requests, datetime, pathlib
-from slugify import slugify
-subject = os.getenv('title', 'Unknown Trend')
-prompt = f"Write a 900-word SEO blog post about {subject}."
-headers = {
-    'Authorization': f"Bearer {os.getenv('HF_TOKEN')}",
-    'Content-Type': 'application/json'
-}
-api = 'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2'
-text = requests.post(api, headers=headers, json={'inputs': prompt}).json()[0]['generated_text']
-now = datetime.datetime.utcnow().strftime('%Y-%m-%d')
-slug = slugify(subject)
-path = pathlib.Path(f'_posts/{now}-{slug}.md')
-front = f"---\nlayout: post\ntitle: {subject}\ndate: {now} 00:00:00 +0000\n---\n\n"
-path.write_text(front + text)
-PY
+          import feedparser, random, requests, datetime, pathlib, os
+          from slugify import slugify
+
+          # 1️⃣  Pick a trending Wikipedia headline
+          feed = feedparser.parse('https://en.wikipedia.org/api/rest_v1/feed/featured/2025/05/30')
+          subject = random.choice([e['title'] for e in feed.entries if len(e['title'].split()) > 2])
+
+          # 2️⃣  Ask HuggingFace LLM for a 900‑word SEO post
+          prompt = f"Write a 900‑word SEO blog post about {subject}."
+          headers = {
+              'Authorization': f"Bearer {os.environ['HF_TOKEN']}",
+              'Content-Type': 'application/json'
+          }
+          api = 'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2'
+          text = requests.post(api, headers=headers, json={'inputs': prompt}).json()[0]['generated_text']
+
+          # 3️⃣  Save as Jekyll Markdown
+          today = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+          slug = slugify(subject)
+          path = pathlib.Path(f'_posts/{today}-{slug}.md')
+          path.parent.mkdir(parents=True, exist_ok=True)
+          front = f"---\nlayout: post\ntitle: {subject}\ndate: {today} 00:00:00 +0000\n---\n\n"
+          path.write_text(front + text)
+          PY
 
       - name: Commit & push
         run: |
           git config user.name 'APIE-bot'
           git config user.email 'bot@users.noreply.github.com'
           git add _posts/*.md || true
-          git commit -m "Autopost" || echo "Nothing new"
+          git commit -m "Autopost" || echo "Nothing new to commit"
           git push

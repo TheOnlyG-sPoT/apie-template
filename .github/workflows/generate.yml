@@ -90,7 +90,14 @@ jobs:
           slug     = slugify(subject)
           md_path  = pathlib.Path(f'_posts/{date_str}-{slug}.md')
           md_path.parent.mkdir(parents=True, exist_ok=True)
-          front = f"---\\nlayout: post\\ntitle: \"{subject}\"\\ndate: {date_str} 00:00:00 +0000\\n---\\n\\n"
+          front = f"""---
+          layout: post
+          title: "{subject}"
+          date: {date_str} 00:00:00 +0000
+          ---
+
+          """
+
           md_path.write_text(front + generated)
           print(f"Wrote {md_path}")
           PY

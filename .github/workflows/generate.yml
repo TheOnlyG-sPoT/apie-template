@@ -97,7 +97,6 @@ jobs:
           ---
 
           """
-
           md_path.write_text(front + generated)
           print(f"Wrote {md_path}")
           PY
